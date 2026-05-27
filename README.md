@@ -134,7 +134,31 @@ sh domjudge_server_start.sh status  # verify
 cd ..
 ```
 
-### **Step 4: Generate efficiency test cases**
+### **Step 4: Measure reference timings on original CodeContests** *(one-time)*
+
+ASR is defined relative to each reference solution's *maximum runtime on the original CodeContests test suite*. This baseline must be measured once via DOMjudge before evaluation:
+
+```shell
+# Submit every accepted reference solution × every original CodeContests TC, record runtimes
+sh domjudge/scripts/codecontests_judge.sh --split test
+sh domjudge/scripts/codecontests_judge.sh --split valid
+
+# Convert raw judge results to the JSONL format the evaluator consumes
+python domjudge/scripts/convert_timing_to_jsonl.py --split test
+python domjudge/scripts/convert_timing_to_jsonl.py --split valid
+
+# Pick the five representative reference solutions per problem (fastest, slowest, three random)
+python code/utils/build_method_selected_solutions.py --split test
+python code/utils/build_method_selected_solutions.py --split valid
+```
+
+Outputs:
+- `domjudge/results/dataset/{strategy}/codecontests_timing_{split}.jsonl` — per-strategy reference timings
+- `domjudge/results/selected_solutions/selected_solutions_{split}.jsonl` — chosen 5 reference solutions per problem
+
+> ⚠️ This stage is heavy (every accepted CodeContests solution × every original test case, submitted through DOMjudge). On a single-host setup it takes hours; multi-instance DOMjudge (`NUM_INSTANCES=4..8` in `domjudge_server_start.sh`) cuts wall time roughly linearly.
+
+### **Step 5: Generate efficiency test cases**
 
 **(1) Extract problem features** *(one-time)*
 ```shell
@@ -157,7 +181,7 @@ sh scripts/slow_tc_generator.sh
 Output: per-problem JSON files at `output/codecontests/our_method/<split>/All_USE/slow_testcase_refinement_prompt/<model>/`. Configuration (split, LLM, mode, number of generators per problem, retry budget, refinement-prompt version, etc.) is set via the variables at the top of `scripts/slow_tc_generator.sh`.
 
 
-### **Step 5: Evaluate (ASR)**
+### **Step 6: Evaluate (ASR)**
 ```shell
 sh scripts/slow_tc_evaluation.sh
 ```
