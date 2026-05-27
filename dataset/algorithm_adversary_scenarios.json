@@ -1,0 +1,816 @@
+{
+  "version": "1.0",
+  "compiled": "2026-05-11-option-A-tp",
+  "policy": {
+    "field_visibility": {
+      "llm_facing": [
+        "name",
+        "vulnerability_class",
+        "slow_input.construction",
+        "slow_input.worst_complexity",
+        "slow_input.best_complexity"
+      ],
+      "catalog_only_strip_before_llm": [
+        "_audit",
+        "_audit.compiled_from",
+        "_audit.urls",
+        "slow_input.explanation"
+      ],
+      "convention": "Any key beginning with underscore (_) is metadata-only. `slow_input.explanation` is kept in catalog as audit/documentation but stripped before LLM injection (it inflates prompt without adding decision-relevant info beyond construction + complexity)."
+    },
+    "complexity_notation": "ASCII only. Use n^2, n*log(n), n*log(n)^2, n^(3/2), n^(4/3), 2^n, sqrt(n), alpha(n). Do not use Greek letters or unicode math symbols.",
+    "vulnerability_classes": {
+      "asymptotic": "Adversarial input changes the asymptotic order (e.g., n*log(n) -> n^2).",
+      "constant_factor": "Asymptotic order is preserved by the implementation, but a specific input pattern maximizes the constant factor (typically 2x-3x more comparisons or operations).",
+      "size_only": "No input pattern materially affects runtime; only raising n to its constraint upper bound stresses the implementation. Catalog entry exists for completeness and routing safety (prevents misapplication of unrelated patterns).",
+      "randomized": "Implementation uses randomization. Asymptotic adversary requires knowledge of the random seed; without seed access the implementation is effectively safe.",
+      "variant_dependent": "Worst-case behavior depends on a parameter of the implementation (e.g., gap sequence in shell sort). Multiple variants must be enumerated."
+    }
+  },
+  "scenarios": {
+    "sorting": {
+      "scenario_summary": "Problem requires producing a sorted permutation of an input sequence (or a derived quantity computed via sorting).",
+      "detection": {
+        "strong_keywords": [
+          "sort",
+          "non-decreasing",
+          "non-increasing",
+          "ascending order",
+          "descending order",
+          "inversion"
+        ]
+      },
+      "implementations": [
+        {
+          "id": "bubble_sort",
+          "name": "Bubble sort",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "Strictly decreasing sequence: a[i] = (n - i) for i in 0..n-1, optionally shifted by lo.",
+            "worst_complexity": "n^2",
+            "best_complexity": "n (with early-exit, on already-sorted input)"
+          }
+        },
+        {
+          "id": "insertion_sort",
+          "name": "Insertion sort",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "Strictly decreasing sequence: a[i] = (n - i) for i in 0..n-1.",
+            "worst_complexity": "n^2",
+            "best_complexity": "n (already-sorted input; only n-1 comparisons, no shifts)"
+          }
+        },
+        {
+          "id": "selection_sort",
+          "name": "Selection sort (classical, swap-based)",
+          "vulnerability_class": "size_only",
+          "slow_input": {
+            "construction": "No input-pattern adversary exists. Use n at the constraint upper bound; data values can be arbitrary (any permutation, all-equal, sorted, reverse-sorted all yield identical comparison counts).",
+            "worst_complexity": "n^2 (always, input-invariant at the comparison level)",
+            "best_complexity": "n^2 (always)"
+          }
+        },
+        {
+          "id": "merge_sort",
+          "name": "Merge sort (top-down or bottom-up)",
+          "vulnerability_class": "constant_factor",
+          "slow_input": {
+            "construction": "Globally alternating high/low pattern: a = [1, n, 2, n-1, 3, n-2, ...] of length n. For natural merge sort variants that detect existing runs, the same alternating pattern is even more effective (run length is 1 everywhere).",
+            "worst_complexity": "n*log(n) (constant factor maximized; ~n*log(n) comparisons)",
+            "best_complexity": "n*log(n) (smaller constant), or n for natural merge sort on already-sorted input"
+          }
+        },
+        {
+          "id": "quicksort_naive_pivot",
+          "name": "Quicksort with first/last-element pivot (Lomuto/Hoare naive)",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "Already-sorted ascending sequence a[i] = i+1, or reverse-sorted, depending on whether the pivot is the first or last element of the partition.",
+            "worst_complexity": "n^2",
+            "best_complexity": "n*log(n) (balanced partitions, e.g., uniformly random data)"
+          }
+        },
+        {
+          "id": "quicksort_median_of_3",
+          "name": "Quicksort with median-of-3 pivot",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "Bentley-McIlroy adversarial sequence — an interactive construction in which the antagonist defers value assignment until the algorithm queries a position, then assigns values so that the median of the three sampled positions is always the smallest or largest available element. A reference C implementation by McIlroy is publicly available as aqsort.c.",
+            "worst_complexity": "n^2",
+            "best_complexity": "n*log(n)"
+          }
+        },
+        {
+          "id": "quicksort_random_pivot",
+          "name": "Quicksort with random pivot (randomized)",
+          "vulnerability_class": "randomized",
+          "slow_input": {
+            "construction": "If the random seed is known to the adversary, simulate the algorithm's pivot choices and craft a sequence forcing pivot extremity at every level — analogous to the median-of-3 attack but seed-specific. If the seed is not known, no deterministic adversarial input exists.",
+            "worst_complexity": "n^2 (probabilistic; effective only with seed knowledge)",
+            "best_complexity": "n*log(n) (expected, regardless of input)"
+          }
+        },
+        {
+          "id": "heapsort",
+          "name": "Heapsort (Floyd's bottom-up sift-down)",
+          "vulnerability_class": "constant_factor",
+          "slow_input": {
+            "construction": "Descending sorted sequence: a[i] = (n - i) for i in 0..n-1. After the build-heap phase, repeated extract-max forces sift-down to traverse nearly to a leaf on every iteration.",
+            "worst_complexity": "n*log(n) (constant factor maximized; ~2*n*log(n) comparisons)",
+            "best_complexity": "n*log(n) (smaller constant; ~n*log(n) comparisons)"
+          }
+        },
+        {
+          "id": "shell_sort",
+          "name": "Shell sort",
+          "vulnerability_class": "variant_dependent",
+          "slow_input": {
+            "construction": "Worst-case input depends on the gap sequence chosen by the implementation. For Shell's original 2^k-style gaps (n/2, n/4, ..., 1), an interleaved descending pattern resists each gap level until the final gap-1 insertion-sort pass, giving n^2 runtime. For Hibbard's (2^k - 1) gaps the worst case is n^(3/2); for Sedgewick's careful gaps it is n^(4/3); for Pratt's 3-smooth (2^a * 3^b) sequence it is n*log(n)^2 with no known asymptotic adversary.",
+            "worst_complexity": "n^2 (Shell's original gaps); n^(3/2) (Hibbard); n^(4/3) (Sedgewick); n*log(n)^2 (Pratt)",
+            "best_complexity": "n (already-sorted input; all gap sequences)"
+          }
+        }
+      ]
+    },
+    "hashing": {
+      "scenario_summary": "Problem uses or implies a hash table (set/map/dict) for membership checks, frequency counts, or de-duplication; OR uses polynomial rolling hash for string operations.",
+      "detection": {
+        "strong_keywords": [
+          "hash",
+          "unordered_map",
+          "unordered_set",
+          "HashMap",
+          "HashSet",
+          "rolling hash",
+          "string hash",
+          "hash function",
+          "hashtable",
+          "anti-hash",
+          "polynomial hash"
+        ]
+      },
+      "implementations": [
+        {
+          "id": "hashtable_identity_int",
+          "name": "Hash table with identity hash for integer keys (no defense)",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "Insert keys that are multiples of a known modulus used by the hash table's bucket array (e.g., 107897, 126271 for libstdc++ std::unordered_map prime sizes). All keys collide into a single bucket; the chain grows linearly.",
+            "worst_complexity": "n^2",
+            "best_complexity": "n (random keys, expected)"
+          }
+        },
+        {
+          "id": "hashtable_chain_no_treeify",
+          "name": "Hash table with chained collision resolution, no fallback (pre-Java 8 / unprotected)",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "Insert n strings crafted to share a common hashCode value. Classic example for Java String: 'Aa' and 'BB' both hash to 2112; chain a sequence of such pairs. All n strings map to one bucket, chain length n.",
+            "worst_complexity": "n^2",
+            "best_complexity": "n (random keys, expected)"
+          }
+        },
+        {
+          "id": "hashtable_chain_with_treeify",
+          "name": "Hash table with chaining + tree fallback (Java 8+ HashMap)",
+          "vulnerability_class": "constant_factor",
+          "slow_input": {
+            "construction": "Same collision-string construction as the unprotected variant; the bucket converts to a red-black tree once it exceeds 8 entries (TREEIFY_THRESHOLD).",
+            "worst_complexity": "n*log(n)",
+            "best_complexity": "n (expected)"
+          }
+        },
+        {
+          "id": "hashtable_siphash_random_seed",
+          "name": "Hash table with SipHash + per-process random seed (Python dict, Ruby Hash)",
+          "vulnerability_class": "randomized",
+          "slow_input": {
+            "construction": "If PYTHONHASHSEED is fixed (env var set, debug mode, or pre-3.4): collision sequences specific to that seed can be precomputed. With default randomized seed: no deterministic adversarial input.",
+            "worst_complexity": "n (with random seed; effectively safe)",
+            "best_complexity": "n (expected)"
+          }
+        },
+        {
+          "id": "polynomial_rolling_hash_single_mod",
+          "name": "Polynomial rolling hash with a single modulus",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "Construct strings with crafted collisions under (base, mod). For mod ~ 10^9 the birthday bound is sqrt(mod) ~ 3*10^4 trial strings to find a collision pair. Stage many such collision pairs as test input; the algorithm's hash-based comparison succeeds spuriously, forcing fallback to character-by-character comparison.",
+            "worst_complexity": "n^2 (when fallback verification is naive comparison)",
+            "best_complexity": "n+m (no collisions)"
+          }
+        },
+        {
+          "id": "polynomial_rolling_hash_double_mod",
+          "name": "Polynomial rolling hash with two independent moduli",
+          "vulnerability_class": "constant_factor",
+          "slow_input": {
+            "construction": "Birthday attack on two independent moduli p1, p2 ~ 10^9 each requires sqrt(p1*p2) ~ 10^9 trial strings — computationally infeasible during contest time. No practical adversarial input exists.",
+            "worst_complexity": "n+m (no asymptotic adversary feasible)",
+            "best_complexity": "n+m"
+          }
+        }
+      ]
+    },
+    "tree_traversal": {
+      "scenario_summary": "Problem requires traversing a tree (DFS / BFS / LCA / centroid decomposition) or computing tree DP over n vertices. Tree given as n-1 edges or as parent array.",
+      "detection": {
+        "strong_keywords": [
+          "rooted tree",
+          "subtree",
+          "ancestor",
+          "lca",
+          "n-1 edges",
+          "tree with n",
+          "vertices of the tree",
+          "binary tree",
+          "parent array",
+          "leaves",
+          "DFS on tree",
+          "preorder",
+          "postorder"
+        ]
+      },
+      "implementations": [
+        {
+          "id": "dfs_recursive",
+          "name": "Depth-first search via system recursion",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "Bamboo tree (chain): edges = [(i, i+1) for i in 1..n-1]. Tree depth = n-1.",
+            "worst_complexity": "stack overflow / RuntimeError (not just slowdown)",
+            "best_complexity": "n (any tree, work-wise)"
+          }
+        },
+        {
+          "id": "dfs_iterative",
+          "name": "Depth-first search via explicit stack (iterative)",
+          "vulnerability_class": "size_only",
+          "slow_input": {
+            "construction": "No input-pattern adversary. Use n at constraint upper bound; tree shape is irrelevant for asymptotic work.",
+            "worst_complexity": "n (always)",
+            "best_complexity": "n (always)"
+          }
+        },
+        {
+          "id": "centroid_decomposition",
+          "name": "Centroid decomposition",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "Star tree: edges = [(1, i) for i in 2..n], where vertex 1 is the center connected to all others.",
+            "worst_complexity": "n^2",
+            "best_complexity": "n*log(n)"
+          }
+        },
+        {
+          "id": "lca_naive_walking",
+          "name": "Lowest common ancestor by naive parent walking",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "Bamboo tree + queries (u, v) where u is the deepest leaf and v is its sibling near the root, OR queries between two leaves on opposite ends of a long path. Each query walks the full tree depth.",
+            "worst_complexity": "n*q",
+            "best_complexity": "q (balanced tree)"
+          }
+        },
+        {
+          "id": "tree_dp_traversal",
+          "name": "Tree DP via single post-order traversal",
+          "vulnerability_class": "size_only",
+          "slow_input": {
+            "construction": "No input-pattern adversary. Use n at constraint upper bound.",
+            "worst_complexity": "n (always)",
+            "best_complexity": "n (always)"
+          }
+        }
+      ]
+    },
+    "graph_shortest_path": {
+      "scenario_summary": "Problem requires shortest paths on a graph (single source, all-pairs, with/without negative weights, with queries).",
+      "detection": {
+        "strong_keywords": [
+          "shortest path",
+          "minimum distance",
+          "shortest distance",
+          "dijkstra",
+          "bellman-ford",
+          "floyd-warshall",
+          "spfa",
+          "minimum spanning tree",
+          "weighted graph",
+          "cycle",
+          "directed",
+          "vertices edges",
+          "multiple edges",
+          "route",
+          "bidirectional",
+          "BFS",
+          "DFS",
+          "graph traversal"
+        ]
+      },
+      "implementations": [
+        {
+          "id": "dijkstra_naive_pq_lazy_decrease",
+          "name": "Dijkstra with lazy decrease-key on a priority queue (push duplicates)",
+          "vulnerability_class": "constant_factor",
+          "slow_input": {
+            "construction": "Dense graph (E ~ V^2) with edge weights chosen so that many vertices receive updates from multiple paths. Each update pushes a new entry to the priority queue without removing the old one.",
+            "worst_complexity": "(V+E)*log(E)  [constant factor worse than (V+E)*log(V)]",
+            "best_complexity": "(V+E)*log(V) (sparse graph)"
+          }
+        },
+        {
+          "id": "dijkstra_proper_heap",
+          "name": "Dijkstra with proper decrease-key heap",
+          "vulnerability_class": "size_only",
+          "slow_input": {
+            "construction": "No input-pattern adversary. Use V, E at constraint upper bounds.",
+            "worst_complexity": "(V+E)*log(V)",
+            "best_complexity": "(V+E)*log(V)"
+          }
+        },
+        {
+          "id": "bellman_ford",
+          "name": "Bellman-Ford shortest path",
+          "vulnerability_class": "size_only",
+          "slow_input": {
+            "construction": "No input-pattern adversary for the basic algorithm. Use V, E at constraint upper bounds.",
+            "worst_complexity": "V*E (always)",
+            "best_complexity": "V*E (always)"
+          }
+        },
+        {
+          "id": "floyd_warshall",
+          "name": "Floyd-Warshall all-pairs shortest path",
+          "vulnerability_class": "size_only",
+          "slow_input": {
+            "construction": "No input-pattern adversary. Use V at constraint upper bound.",
+            "worst_complexity": "V^3 (always)",
+            "best_complexity": "V^3 (always)"
+          }
+        },
+        {
+          "id": "bfs_basic",
+          "name": "Breadth-first search (unit-weight shortest path)",
+          "vulnerability_class": "size_only",
+          "slow_input": {
+            "construction": "No input-pattern adversary. Use V, E at constraint upper bounds.",
+            "worst_complexity": "V+E (always)",
+            "best_complexity": "V+E (always)"
+          }
+        },
+        {
+          "id": "spfa_queue",
+          "name": "SPFA (Shortest Path Faster Algorithm)",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "Adversarial graphs documented in 'SPFA died' literature: long chains with strategic negative-weight back-edges that force every vertex to be re-relaxed many times. Specific constructions are published in Codeforces blogs.",
+            "worst_complexity": "V*E",
+            "best_complexity": "V+E (sparse, expected)"
+          }
+        }
+      ]
+    },
+    "string_matching": {
+      "scenario_summary": "Problem requires substring search, palindrome detection, suffix structure, or pattern matching on a string of length n.",
+      "detection": {
+        "strong_keywords": [
+          "palindrome",
+          "longest palindromic",
+          "string matching",
+          "pattern matching",
+          "find pattern",
+          "find a pattern",
+          "find all occurrences",
+          "substring search",
+          "longest common substring",
+          "longest common subsequence",
+          "kmp",
+          "z-algorithm",
+          "suffix array",
+          "suffix tree"
+        ]
+      },
+      "implementations": [
+        {
+          "id": "naive_string_match",
+          "name": "Naive string matching (brute-force shift comparison)",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "Text = 'a'*(n-1) + 'b'; pattern = 'a'*(m-1) + 'b'. Each shift compares m-1 characters before mismatching at the last; n shifts total give Theta(n*m).",
+            "worst_complexity": "n*m",
+            "best_complexity": "n+m (no near-misses)"
+          }
+        },
+        {
+          "id": "kmp",
+          "name": "Knuth-Morris-Pratt string matching",
+          "vulnerability_class": "size_only",
+          "slow_input": {
+            "construction": "No input-pattern adversary. Use n, m at constraint upper bounds.",
+            "worst_complexity": "n+m (always)",
+            "best_complexity": "n+m (always)"
+          }
+        },
+        {
+          "id": "rabin_karp_single_mod",
+          "name": "Rabin-Karp with single-modulus polynomial hash",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "Same construction as polynomial_rolling_hash_single_mod: birthday-paradox collision pairs under (base, mod). With single mod ~10^9, sqrt(mod) ~ 3*10^4 trial strings find collisions. Crafted text and pattern produce many false-positive hash matches.",
+            "worst_complexity": "n*m (under hash collisions)",
+            "best_complexity": "n+m"
+          }
+        },
+        {
+          "id": "suffix_array_basic_sort",
+          "name": "Suffix array via comparison-based sort of suffixes",
+          "vulnerability_class": "constant_factor",
+          "slow_input": {
+            "construction": "Highly repetitive string, e.g., 'ab'*(n/2) (period 2). Suffix comparisons share long common prefixes, forcing each comparison to scan many characters before differing.",
+            "worst_complexity": "n^2 * log(n) (naive O(n)-compare suffix sort)",
+            "best_complexity": "n*log(n) (random text)"
+          }
+        },
+        {
+          "id": "z_algorithm",
+          "name": "Z-algorithm",
+          "vulnerability_class": "size_only",
+          "slow_input": {
+            "construction": "No input-pattern adversary. Use string length at constraint upper bound.",
+            "worst_complexity": "n+m (always)",
+            "best_complexity": "n+m (always)"
+          }
+        }
+      ]
+    },
+    "bst_data_structure": {
+      "scenario_summary": "Problem uses a binary search tree, balanced search tree, or related order-statistic data structure (segment tree, Fenwick tree).",
+      "detection": {
+        "strong_keywords": [
+          "binary search tree",
+          "segment tree",
+          "fenwick tree",
+          "binary indexed tree",
+          "indexed tree",
+          "treap",
+          "splay",
+          "kth smallest",
+          "kth largest",
+          "kth element",
+          "range query",
+          "range update",
+          "point update",
+          "point query",
+          "order statistics",
+          "multiset"
+        ]
+      },
+      "implementations": [
+        {
+          "id": "bst_unbalanced",
+          "name": "Unbalanced binary search tree (no rotation)",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "Insert keys in sorted order (1, 2, 3, ..., n) or reverse-sorted. The BST degenerates into a linked list; recursion depth = n.",
+            "worst_complexity": "n^2",
+            "best_complexity": "n*log(n) (random order)"
+          }
+        },
+        {
+          "id": "avl_balanced",
+          "name": "AVL tree (height-balanced)",
+          "vulnerability_class": "size_only",
+          "slow_input": {
+            "construction": "No input-pattern adversary. Use n at constraint upper bound.",
+            "worst_complexity": "log(n) per op (always)",
+            "best_complexity": "log(n) per op"
+          }
+        },
+        {
+          "id": "splay_tree",
+          "name": "Splay tree (self-adjusting BST)",
+          "vulnerability_class": "size_only",
+          "slow_input": {
+            "construction": "No input-pattern adversary that breaks amortized bound. Sequential or sorted access produces the slowest individual operations but the amortized bound is preserved.",
+            "worst_complexity": "log(n) amortized (n worst single op, balanced over m ops)",
+            "best_complexity": "log(n) amortized"
+          }
+        },
+        {
+          "id": "treap_randomized",
+          "name": "Treap (randomized BST with priorities)",
+          "vulnerability_class": "randomized",
+          "slow_input": {
+            "construction": "If the random seed used for priority assignment is known, construct an insertion sequence such that all priorities form a sorted order, degenerating the treap to a linked list. Without seed knowledge, no deterministic adversary.",
+            "worst_complexity": "n^2 (with seed knowledge)",
+            "best_complexity": "n*log(n) (expected)"
+          }
+        },
+        {
+          "id": "segment_tree_basic",
+          "name": "Segment tree (point update, range query)",
+          "vulnerability_class": "size_only",
+          "slow_input": {
+            "construction": "No input-pattern adversary. Use n, q at constraint upper bounds.",
+            "worst_complexity": "(n + q)*log(n) (always)",
+            "best_complexity": "(n + q)*log(n)"
+          }
+        }
+      ]
+    },
+    "dp_recursion": {
+      "scenario_summary": "Problem requires dynamic programming or recursive computation over states.",
+      "detection": {
+        "strong_keywords": [
+          "dynamic programming",
+          "memoization",
+          "subproblem",
+          "knapsack",
+          "memoize",
+          "transition",
+          "state"
+        ]
+      },
+      "implementations": [
+        {
+          "id": "naive_recursive_no_memo",
+          "name": "Naive recursive solution without memoization",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "Use n at constraint upper bound; the algorithm itself has exponential blowup on any non-trivial input. For Fibonacci-like recursion (two recursive calls per state), input n=40 is already untenable.",
+            "worst_complexity": "phi^n (exponential)",
+            "best_complexity": "phi^n (no memoization, always)"
+          }
+        },
+        {
+          "id": "memoized_dp_topdown",
+          "name": "Memoized DP (top-down)",
+          "vulnerability_class": "size_only",
+          "slow_input": {
+            "construction": "No input-pattern adversary beyond raising n. Total states is determined by problem structure.",
+            "worst_complexity": "states * transition_cost (problem-dependent)",
+            "best_complexity": "same"
+          }
+        },
+        {
+          "id": "iterative_bottom_up_dp",
+          "name": "Iterative bottom-up DP",
+          "vulnerability_class": "size_only",
+          "slow_input": {
+            "construction": "No input-pattern adversary. Use n at constraint upper bound.",
+            "worst_complexity": "states * transition_cost",
+            "best_complexity": "same"
+          }
+        }
+      ]
+    },
+    "number_theory": {
+      "scenario_summary": "Problem involves number-theoretic computation: GCD/LCM, prime sieve, factorization, modular arithmetic.",
+      "detection": {
+        "strong_keywords": [
+          "gcd",
+          "lcm",
+          "coprime",
+          "euclidean algorithm",
+          "sieve",
+          "prime number",
+          "prime factor",
+          "modular arithmetic",
+          "modular inverse",
+          "factorization",
+          "greatest common divisor",
+          "divisors"
+        ]
+      },
+      "implementations": [
+        {
+          "id": "euclidean_gcd_pair",
+          "name": "Euclidean algorithm for GCD",
+          "vulnerability_class": "constant_factor",
+          "slow_input": {
+            "construction": "Pair of consecutive Fibonacci numbers (F[k], F[k+1]) — these maximize the number of division steps for a given input size, by Lame's theorem.",
+            "worst_complexity": "log(min(a,b)) (constant maximized via Fibonacci)",
+            "best_complexity": "1 (when a divides b)"
+          }
+        },
+        {
+          "id": "sieve_eratosthenes",
+          "name": "Sieve of Eratosthenes",
+          "vulnerability_class": "size_only",
+          "slow_input": {
+            "construction": "No input-pattern adversary. Use n at constraint upper bound.",
+            "worst_complexity": "n*log(log(n)) (always)",
+            "best_complexity": "n*log(log(n)) (always)"
+          }
+        },
+        {
+          "id": "trial_division_factor",
+          "name": "Trial division factorization",
+          "vulnerability_class": "size_only",
+          "slow_input": {
+            "construction": "Set N to be a large prime (or a product of two primes near sqrt(N_max)) so that trial division must check all candidates up to sqrt(N).",
+            "worst_complexity": "sqrt(N) (when N has no small factors)",
+            "best_complexity": "1 (small factor found early)"
+          }
+        }
+      ]
+    },
+    "binary_search": {
+      "scenario_summary": "Problem uses binary search either as a primitive (lower_bound / upper_bound on a sorted array) or as a meta-strategy (binary search on the answer over a monotone predicate). Adversarial inputs aim to force the maximum number of predicate evaluations / log(range) iterations under the most expensive per-evaluation work.",
+      "detection": {
+        "strong_keywords": [
+          "binary search",
+          "lower bound",
+          "upper bound",
+          "lower_bound",
+          "upper_bound",
+          "bisect",
+          "smallest x such that",
+          "largest k such that",
+          "minimum value such that",
+          "maximum value such that",
+          "binary search on answer",
+          "feasibility predicate"
+        ]
+      },
+      "implementations": [
+        {
+          "id": "binary_search_on_answer_extreme",
+          "name": "Binary search on the answer with the answer at the extreme of the search range",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "Pick the search range [lo, hi] at its full constraint extent (e.g., hi - lo = 10^9 or 10^18). Construct the input so the feasibility predicate flips only at the largest valid value, forcing the binary search to run the full log2(hi-lo) iterations AND each predicate evaluation must scan the entire input.",
+            "worst_complexity": "n*log(range)",
+            "best_complexity": "log(range) (with O(1) predicate)"
+          }
+        },
+        {
+          "id": "lower_bound_dense_duplicates",
+          "name": "lower_bound on an array with all-equal elements (forces full equal-range traversal in naive impl)",
+          "vulnerability_class": "constant_factor",
+          "slow_input": {
+            "construction": "All n elements equal to a single value v. Query lower_bound(v) and upper_bound(v) repeatedly (q queries, q = 10^5).",
+            "worst_complexity": "n*q",
+            "best_complexity": "q*log(n)"
+          }
+        }
+      ]
+    },
+    "two_pointers": {
+      "scenario_summary": "Problem uses a two-pointer / sliding-window scan over a sequence. The window grows or shrinks based on a condition; total work is amortized O(n) when each pointer advances monotonically. Adversarial inputs target implementations that re-scan the window or fail to amortize.",
+      "detection": {
+        "strong_keywords": [
+          "sliding window",
+          "two pointers",
+          "two-pointer",
+          "longest subarray",
+          "longest substring",
+          "minimum window",
+          "smallest segment containing",
+          "longest contiguous",
+          "shortest contiguous",
+          "monotonic",
+          "left or right",
+          "pairs of positions"
+        ]
+      },
+      "implementations": [
+        {
+          "id": "naive_window_quadratic",
+          "name": "Naive sliding window that re-scans on every shrink (O(n^2))",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "Pick n at its constraint maximum. Construct an array where the window-validity condition becomes invalid for nearly every position pair, forcing a fresh inner loop. Example: an array where each element triggers the condition individually but the two-pointer right pointer must reset on every left advance (e.g., a permutation arranged so distinct-element counts spike alternately).",
+            "worst_complexity": "n^2",
+            "best_complexity": "n"
+          }
+        }
+      ]
+    },
+    "bitmasks": {
+      "scenario_summary": "Problem uses bitmask DP, subset enumeration, or sum-over-subsets DP over a small set of n elements (typically n ≤ 20-25). Worst-case is driven by 2^n state space; SOS DP and TSP-style transitions can reach 2^n*n or even 3^n if implemented naively (iterating submasks).",
+      "detection": {
+        "strong_keywords": [
+          "bitmask",
+          "bit mask",
+          "subset DP",
+          "submask",
+          "SOS DP",
+          "sum over subsets",
+          "TSP",
+          "Hamiltonian",
+          "Held-Karp",
+          "subsets of size",
+          "bitmask DP",
+          "bitwise",
+          "xor",
+          "bitwise xor",
+          "xor operation"
+        ]
+      },
+      "implementations": [
+        {
+          "id": "subset_dp_held_karp",
+          "name": "Held-Karp / bitmask DP forcing the full 2^n state space at n_max",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "Pin n to its constraint maximum (typically n=20 or n=22). Construct the input so every (mask, last) state is reachable and the transition cost cannot be pruned (e.g., a TSP graph with all positive distinct edges, or a covering-set instance where every element lies in many sets, defeating set-pruning).",
+            "worst_complexity": "n^2 * 2^n",
+            "best_complexity": "n^2 * 2^n (no prune possible at this size)"
+          }
+        },
+        {
+          "id": "sos_dp_naive_submask",
+          "name": "Sum-over-subsets DP via naive submask iteration (O(3^n))",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "Pin n to constraint max (n=20). Provide values f[mask] that are all non-zero, so the implementation cannot short-circuit on zero entries. The naive SOS impl iterates every submask of every mask: ∑_{m=0..2^n-1} 2^popcount(m) = 3^n.",
+            "worst_complexity": "3^n",
+            "best_complexity": "n * 2^n"
+          }
+        }
+      ]
+    },
+    "combinatorics": {
+      "scenario_summary": "Problem requires counting configurations (permutations, combinations, ways), typically under a modulus. Worst-case for naive implementations comes from large n forcing factorial / binomial computation, or deep inclusion-exclusion enumeration over many constraints.",
+      "detection": {
+        "strong_keywords": [
+          "count the number of ways",
+          "number of permutations",
+          "number of combinations",
+          "C(n,k)",
+          "binomial",
+          "factorial",
+          "stars and bars",
+          "inclusion-exclusion"
+        ]
+      },
+      "implementations": [
+        {
+          "id": "factorial_no_precompute",
+          "name": "n!, C(n,k), inv factorials computed without precomputation",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "Pin n to constraint max (n = 10^6). Issue q queries (q = 10^5) for distinct C(n_i, k_i) values that span the full [0..n] range so memoization caches don't help.",
+            "worst_complexity": "q * n",
+            "best_complexity": "n + q  (with precomputation)"
+          }
+        },
+        {
+          "id": "inclusion_exclusion_2k",
+          "name": "Inclusion-exclusion over k constraints with k near 20+",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "k constraints (forbidden patterns / required-property checks) with k = 20-25. Each combined predicate among 2^k subsets is non-trivial to compute. Construct the input so every subset evaluates to a non-zero contribution (no early termination).",
+            "worst_complexity": "2^k * n",
+            "best_complexity": "2^k * O(1)  (with cached subset values)"
+          }
+        }
+      ]
+    },
+    "geometry": {
+      "scenario_summary": "Problem operates on geometric primitives: points, line segments, polygons, circles, and asks for properties such as intersection, area, distance, or hull. Adversaries target degenerate configurations (collinear points, coincident segments, all points on a circle) which break implementations that assume general position.",
+      "detection": {
+        "strong_keywords": [
+          "polygon",
+          "convex",
+          "convex hull",
+          "line segment",
+          "intersection of segments",
+          "polygon area",
+          "closest pair",
+          "circle",
+          "point in polygon",
+          "geometric",
+          "Cartesian plane",
+          "x and y coordinates",
+          "absolute relative error"
+        ]
+      },
+      "implementations": [
+        {
+          "id": "convex_hull_all_collinear",
+          "name": "Convex hull on a degenerate set (all points collinear, n at max)",
+          "vulnerability_class": "asymptotic",
+          "slow_input": {
+            "construction": "n = 10^5 points, all lying on the line y = x (or any single line). Coordinates spread uniformly so duplicates are rare. Naive Graham-scan / Andrew's monotone-chain handles this in O(n*log n), but implementations that perform extra checks for collinearity (e.g., via three-way orientation) revisit each point multiple times.",
+            "worst_complexity": "n * log(n)",
+            "best_complexity": "n * log(n)  (size-only)"
+          }
+        },
+        {
+          "id": "closest_pair_grid_layout",
+          "name": "Closest pair of points on a regular grid layout (kd-tree degenerates)",
+          "vulnerability_class": "constant_factor",
+          "slow_input": {
+            "construction": "n points placed at (i*1, j*1) for i,j in [0..sqrt(n)]. All pairwise distances of identical magnitude, so kd-tree pruning does not skip subtrees.",
+            "worst_complexity": "n^2  (kd-tree on grid)",
+            "best_complexity": "n * log(n)  (D&C)"
+          }
+        }
+      ]
+    }
+  }
+}

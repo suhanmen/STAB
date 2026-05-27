@@ -1,0 +1,15 @@
+provider: "local"
+
+gemini_model: "gemini-3.1-flash-lite-preview"
+openai_model: "gpt-5.4-mini"
+
+local_model: "google/gemma-3-12b-it"
+cache_dir: null
+
+temperature: 1.0
+max_new_tokens: 4096
+top_p: 0.95
+
+max_retries: 3
+
+api_key: null
