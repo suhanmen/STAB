@@ -22,6 +22,76 @@
 
 
 ## 🔍 Motivation
+
+<div align="center">
+<table>
+    <thead>
+      <tr>
+        <th style="text-align: left;">Feature</th>
+        <th style="text-align: center;">🚫 As-Is (EvalPerf / WEDGE)</th>
+        <th style="text-align: center;">✨ To-Be (STAB)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="text-align: left;"><strong>Input</strong></td>
+        <td style="text-align: center;">
+          <strong>Reference implementation</strong><br>
+          <sub>(profiles a target program)</sub>
+        </td>
+        <td style="text-align: center;">
+          <strong>Specification only</strong><br>
+          <sub>(no solution code needed)</sub>
+        </td>
+      </tr>
+      <tr>
+        <td style="text-align: left;"><strong>Signal</strong></td>
+        <td style="text-align: center;">
+          <strong>Size scaling / exec feedback</strong><br>
+          <sub>(tied to one implementation)</sub>
+        </td>
+        <td style="text-align: center;">
+          <strong>Algorithmic structure</strong><br>
+          <sub>(constraint saturation + scenario catalog)</sub>
+        </td>
+      </tr>
+      <tr>
+        <td style="text-align: left;"><strong>Worst case</strong></td>
+        <td style="text-align: center;">
+          📉 <strong>Scale-shaped only</strong><br>
+          <sub>(misses structural worst cases)</sub>
+        </td>
+        <td style="text-align: center;">
+          📈 <strong>Size + structure</strong><br>
+          <sub>(boundary × adversarial pattern)</sub>
+        </td>
+      </tr>
+      <tr>
+        <td style="text-align: left;"><strong>Generalization</strong></td>
+        <td style="text-align: center;">
+          <strong>Per-implementation</strong><br>
+          <sub>(inherits that code's artifacts)</sub>
+        </td>
+        <td style="text-align: center;">
+          <strong>Per-problem</strong><br>
+          <sub>(consistent across reference solutions)</sub>
+        </td>
+      </tr>
+      <tr>
+        <td style="text-align: left;"><strong>Bottleneck exposure (ASR)</strong></td>
+        <td style="text-align: center;">
+          💸 <strong>~37%</strong><br>
+          <sub>(EvalPerf 36.5% / WEDGE 36.5%)</sub>
+        </td>
+        <td style="text-align: center;">
+          ⚡ <strong>~72%</strong><br>
+          <sub>(specification-only, no reference code)</sub>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
 Functional correctness alone is not enough for algorithmic code. A solution that passes every test in a benchmark suite may still be a **suboptimal algorithm** that only escapes detection because the suite does not stress its worst case. **STAB** asks a sharper question: *“Does this test case actually expose the algorithm's bottleneck?”* — and generates inputs that push correct-but-suboptimal implementations over their time limit using **only the natural-language problem specification**, without ever reading the solution code.
 
 ## ✨ About STAB
@@ -190,6 +260,47 @@ Judges each generated test against the five accepted reference solutions (fastes
 Output: per-strategy summaries at `evaluation/codecontests/our_method/<split>/All_USE/slow_testcase_refinement_prompt/<model>/`.
 
 Each script supports detailed configuration via the variables at the top of the corresponding shell file (split, LLM, mode, number of generators per problem, retry budget, refinement-prompt version, etc.).
+
+
+## 🏗️ Code Structure
+
+```
+STAB/
+├── code/
+│   ├── config/
+│   │   └── test_case_generator_model.yaml      # LLM provider / model / sampling
+│   └── utils/
+│       ├── slow_testcase_generator.py          # ⭐ main entry
+│       ├── cpsat_solver.py                     # CP-SAT boundary maximizer
+│       ├── kw_anchor_knn.py                    # scenario routing (KW match ∪ centroid KNN)
+│       ├── algorithm_adversary_catalog.py      # 13-scenario / 51-impl catalog loader
+│       ├── generator_executor.py               # exec + validate LLM-emitted generator code
+│       ├── slow_testcase_evaluation.py         # eval: DOMjudge → ASR / LEF / compliance
+│       ├── tc_constraint_validator.py          # constraint-compliance metric
+│       ├── base_output_to_judge_tc.py          # convert generated TCs → judge format
+│       ├── description_feature_extractor.py    # build features_{split}.json
+│       ├── build_kw_anchor_meta.py             # anchor pool: keyword-match metadata
+│       ├── build_train_anchors.py              # anchor pool: SFR embeddings
+│       ├── build_method_selected_solutions.py  # pick reference solutions / problem
+│       └── instruction/
+│           └── slow_testcase_refinement_prompt.py  # generation prompt
+├── scripts/
+│   ├── description_feature_extractor.sh        # feature extraction
+│   ├── slow_tc_generator.sh                    # generation driver
+│   └── slow_tc_evaluation.sh                   # evaluation driver
+├── domjudge/
+│   ├── codecontests_judge.py                   # submit problems → collect timings
+│   └── scripts/
+│       ├── domjudge_server_start.sh            # bring up DOMjudge containers
+│       ├── codecontests_judge.sh               # reference timing measurement
+│       └── convert_timing_to_jsonl.py          # raw timing → JSONL for evaluator
+├── dataset/
+│   └── algorithm_adversary_scenarios.json      # the 13-scenario catalog
+├── setting/environment.yaml                    # conda environment
+├── figures/overview.png                        # pipeline figure
+├── LICENSE
+└── README.md
+```
 
 
 ## 🔖 Citation
