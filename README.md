@@ -13,7 +13,7 @@
 </p>
 
 <div align="center">
-    <a href="https://arxiv.org/abs/<arxiv-id>"><b>Paper Link</b>📖</a>
+    <a href="https://arxiv.org/abs/2605.27981"><b>Paper Link</b>📖</a>
 </div><br>
 
 
@@ -194,9 +194,13 @@ Each script supports detailed configuration via the variables at the top of the 
 
 ## 🔖 Citation
 ```bibtex
-@misc{lim2026stab,
-  title         = {STAB: Specification-driven Testing for Algorithmic Bottlenecks},
-  author        = {Soohan Lim and Joonghyuk Hahn and Hyundong Jin and Yo-Sub Han},
-  year          = {2026}
+@misc{lim2026stabspecificationdriventestingalgorithmic,
+      title={STAB: Specification-driven Testing for Algorithmic Bottlenecks}, 
+      author={Soohan Lim and Joonghyuk Hahn and Hyundong Jin and Yo-Sub Han},
+      year={2026},
+      eprint={2605.27981},
+      archivePrefix={arXiv},
+      primaryClass={cs.AI},
+      url={https://arxiv.org/abs/2605.27981}, 
 }
 ```
