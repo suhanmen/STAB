@@ -118,9 +118,11 @@ The figure above illustrates STAB's three-stage pipeline: **Constraint Saturator
 
 ## 📈 Results
 
+> **ASR (Algorithmic Slowdown Rate)** = fraction of generated test cases that drive a reference solution to a runtime *exceeding its maximum runtime on the original CodeContests test suite*. Higher = STAB's test cases stress solutions more than the dataset's own worst case does.
+
 **Main result — Algorithmic Slowdown Rate (ASR) on CodeContests**, averaged over five accepted reference solutions per problem (fastest, slowest, and three random) across Python, Java, and C++.
 
-| Model          | Method | ASR_Python (↑) | ASR_Java (↑) | ASR_C++ (↑) | Avg. (↑)     |
+| Model          | Method | ASR_Python | ASR_Java | ASR_C++ | Avg.     |
 | :------------- | :----- | :------------: | :----------: | :---------: | :----------: |
 | **Qwen-3.5**   | Base   |     53.54%     |    52.51%    |    56.00%   |    54.02%    |
 |                | STAB   |   **70.80%**   |  **73.36%**  |  **69.05%** |  **71.07%**  |
@@ -133,7 +135,7 @@ The figure above illustrates STAB's three-stage pipeline: **Constraint Saturator
 
 **STAB vs. prior efficiency-test methods** (averaged over 5 accepted solutions per problem).
 
-| Model          | Method   | ASR_Python (↑) | ASR_Java (↑) | ASR_C++ (↑) |
+| Model          | Method   | ASR_Python | ASR_Java | ASR_C++ |
 | :------------- | :------- | :------------: | :----------: | :---------: |
 | **Gemini-3.1** | EvalPerf |     28.91%     |    31.89%    |    23.21%   |
 |                | WEDGE    |     35.79%     |    41.09%    |    38.92%   |
@@ -144,7 +146,7 @@ The figure above illustrates STAB's three-stage pipeline: **Constraint Saturator
 
 **Per-module ablation** (ASR averaged over five accepted solutions).
 
-| Model          | Variant        | ASR Python (↑) | ASR Java (↑) | ASR C++ (↑) |
+| Model          | Variant        | ASR Python | ASR Java | ASR C++ |
 | :------------- | :------------- | :------------: | :----------: | :---------: |
 | **Gemini-3.1** | STAB           |   **73.68%**   |  **75.44%**  |  **69.48%** |
 |                | – M1           |     70.32%     |    73.67%    |    66.47%   |
@@ -165,6 +167,32 @@ Our experiments across 4 LLMs (Qwen-3.5, Gemma-4, Gemini-3.1, GPT-5.4) on CodeCo
 
 
 For per-strategy breakdowns, the full 13-scenario catalog with 51 implementations, and case studies, see the paper.
+
+## 🔬 Case Study: *Saturate every coupled dimension, then pick the topology*
+
+**Problem 1600_F — "Party Organization."** A Ramsey-style search over a graph with `N` vertices and `M` edges, *both* bounded by `2·10⁵`. The worst case needs **both** dimensions saturated **and** a topology that maximizes the search — a **star graph** (vertex 1 joined to every other vertex). All three methods below produced **5 test cases each**, so this is an apples-to-apples comparison of *what* they generate, not whether they run.
+
+| Method | `N` (vertices) | `M` (edges) | topology | ASR<br><sub>(averaged across Python / Java / C++)</sub> |
+|---|:---:|:---:|---|:---:|
+| **STAB** | **2·10⁵** | **2·10⁵** | **star** (1 → all) | **100%** |
+| WEDGE | 1,000 | 2·10⁵ | dense *small* graph | 36% |
+| EvalPerf | 2·10⁵ | 625 | sparse bipartite | 33% |
+
+```text
+# STAB output — N = M = 2·10⁵, star topology (vertex 1 connected to all)
+200000 200000
+1 2
+1 3
+1 4
+...        (199,999 edges, all incident to vertex 1)
+```
+
+- **EvalPerf** asks the LLM to write a `perf_input_gen(scale: int) -> str` function with a *single* scale knob. The LLM here picked `N` as the knob and hard-coded a sparse `M = 625` template, so scaling `scale` only stretches one dimension — the coupled edge count never grows.
+- **WEDGE** runs AFL++ coverage-guided fuzzing on seed test cases. Its byte-level mutations can inflate individual numbers (`M` drifted up to 200,000) but cannot *coordinate* "make both `N` and `M` huge **and** wire all edges into a star" in a single mutation step — that level of structural foresight is outside the fuzzer's edit grammar, so `N` stays near the seed.
+- **STAB** decomposes the problem: the **constraint saturator** treats saturation as a constraint problem and finds `N = M = 2·10⁵` *jointly* under the edge/vertex bound (via CP-SAT); the **adversarial scenario injector** then *retrieves* the **star topology** from the scenario catalog and asks the LLM to instantiate it inside that boundary. Reaching the corner of the constraint space *and* picking the right structure there are different jobs handled by different stages — the only input here that beats the original test suite on *every* generated case: **ASR 100%** vs 36% / 33%.
+
+> **Takeaway:** prior methods each saturate a *single* axis (overall size, or one dimension). STAB's **constraint saturator** resolves *all coupled dimensions jointly*, and the **scenario injector** picks the *structure* that turns that boundary into a worst case — neither half alone suffices.
+
 
 
 ## 🛠️ Setup
